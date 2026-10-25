@@ -9,6 +9,7 @@ import type {
 import { createFormationPlayers } from '../formations'
 
 export const TEAM_CATEGORIES: TeamCategory[] = [
+  'Custom',
   'Premier League',
   'La Liga',
   'Bundesliga',
@@ -985,8 +986,8 @@ export const TEAMS: TeamPreset[] = [
   },
 ]
 
-export function getTeamById(id: string): TeamPreset | undefined {
-  return TEAMS.find((t) => t.id === id)
+export function getTeamById(id: string, customTeams: TeamPreset[] = []): TeamPreset | undefined {
+  return customTeams.find((t) => t.id === id) || TEAMS.find((t) => t.id === id)
 }
 
 /**

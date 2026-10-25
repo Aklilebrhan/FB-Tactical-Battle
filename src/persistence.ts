@@ -1,5 +1,8 @@
 const STORAGE_KEY = 'tactical-board-v2'
 const FRAMES_KEY = 'tactical-board-frames-v1'
+const CUSTOM_TEAMS_KEY = 'tactical-board-custom-teams-v1'
+
+import type { TeamPreset } from './types'
 
 export interface PersistedSnapshot {
   players: unknown
@@ -21,6 +24,7 @@ export interface PersistedSnapshot {
   awayTeamName?: unknown
   homeTeamId?: unknown
   awayTeamId?: unknown
+  customTeams?: unknown
 }
 
 export function loadPersisted(): PersistedSnapshot | null {
@@ -63,6 +67,25 @@ export function loadFrames<T>(): T[] {
 export function saveFrames<T>(frames: T[]): void {
   try {
     localStorage.setItem(FRAMES_KEY, JSON.stringify(frames))
+  } catch {
+    // ignore
+  }
+}
+
+export function loadCustomTeams(): TeamPreset[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_TEAMS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as TeamPreset[]) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveCustomTeams(teams: TeamPreset[]): void {
+  try {
+    localStorage.setItem(CUSTOM_TEAMS_KEY, JSON.stringify(teams))
   } catch {
     // ignore
   }

@@ -4,12 +4,11 @@ import {
   ArrowLeftRight,
   Plus,
   Trash2,
-  ChevronDown,
-  ChevronRight,
   Palette,
   Sparkles,
+  BookmarkPlus,
 } from 'lucide-react'
-import type { Player, BenchPlayer, TeamId, TeamKit, TeamPreset } from '../types'
+import type { Player, BenchPlayer, TeamId, TeamKit, TeamPreset, FormationId } from '../types'
 import { TEAMS } from '../data/teams'
 import { TeamPickerModal } from './TeamPickerModal'
 
@@ -23,6 +22,9 @@ interface RightSidebarProps {
   awayTeamName: string
   homeTeamId?: string
   awayTeamId?: string
+  homeFormation: FormationId
+  awayFormation: FormationId
+  customTeams: TeamPreset[]
   selectedId: string | null
   onSelect: (id: string | null) => void
   onUpdatePlayer: (id: string, patch: Partial<Player>) => void
@@ -32,6 +34,10 @@ interface RightSidebarProps {
   onSubstitute: (teamSide: TeamId, pitchPlayerId: string, benchPlayerId: string) => void
   onAddBenchPlayer: (teamSide: TeamId) => void
   onRemoveBenchPlayer: (teamSide: TeamId, benchPlayerId: string) => void
+  onCreateTeam: (teamSide: TeamId) => void
+  onEditCustomTeam: (team: TeamPreset) => void
+  onDeleteCustomTeam: (teamId: string) => void
+  onSaveCurrentAsCustomTeam: (teamSide: TeamId) => void
 }
 
 export function RightSidebar({
@@ -44,6 +50,9 @@ export function RightSidebar({
   awayTeamName,
   homeTeamId,
   awayTeamId,
+  homeFormation,
+  awayFormation,
+  customTeams,
   selectedId,
   onSelect,
   onUpdatePlayer,
@@ -53,6 +62,10 @@ export function RightSidebar({
   onSubstitute,
   onAddBenchPlayer,
   onRemoveBenchPlayer,
+  onCreateTeam,
+  onEditCustomTeam,
+  onDeleteCustomTeam,
+  onSaveCurrentAsCustomTeam,
 }: RightSidebarProps) {
   const [modalTeamSide, setModalTeamSide] = useState<TeamId | null>(null)
   const [homeKitOpen, setHomeKitOpen] = useState(false)
@@ -79,11 +92,22 @@ export function RightSidebar({
   return (
     <>
       <aside className="flex h-full w-80 shrink-0 flex-col gap-3.5 overflow-y-auto border-l border-slate-700/60 bg-slate-900/95 p-4 text-slate-100">
-        <div>
-          <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wide">
-            Teams & Rosters
-          </h2>
-          <p className="text-xs text-slate-400">Manage European clubs, starters & benches</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wide">
+              Teams & Rosters
+            </h2>
+            <p className="text-xs text-slate-400">Manage clubs, custom teams & benches</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onCreateTeam('home')}
+            className="flex items-center gap-1 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white shadow transition"
+            title="Create any custom team"
+          >
+            <Plus size={13} />
+            <span>New Team</span>
+          </button>
         </div>
 
         {/* Selected Player Editor (Pitch or Bench) */}
@@ -262,9 +286,11 @@ export function RightSidebar({
           teamSide="home"
           teamName={homeTeamName}
           teamId={homeTeamId}
+          formation={homeFormation}
           kit={homeKit}
           players={homePlayers}
           bench={homeBench}
+          customTeams={customTeams}
           selectedId={selectedId}
           activeTab={homeActiveTab}
           kitOpen={homeKitOpen}
@@ -273,6 +299,8 @@ export function RightSidebar({
           onTabChange={setHomeActiveTab}
           onSelect={onSelect}
           onOpenModal={() => setModalTeamSide('home')}
+          onCreateTeam={() => onCreateTeam('home')}
+          onSaveCurrentAsCustom={() => onSaveCurrentAsCustomTeam('home')}
           onKitChange={(k) => onKitChange('home', k)}
           onSelectPreset={(p) => onLoadTeamPreset('home', p)}
           onSubstitute={(starterId, benchId) => onSubstitute('home', starterId, benchId)}
@@ -285,9 +313,11 @@ export function RightSidebar({
           teamSide="away"
           teamName={awayTeamName}
           teamId={awayTeamId}
+          formation={awayFormation}
           kit={awayKit}
           players={awayPlayers}
           bench={awayBench}
+          customTeams={customTeams}
           selectedId={selectedId}
           activeTab={awayActiveTab}
           kitOpen={awayKitOpen}
@@ -296,6 +326,8 @@ export function RightSidebar({
           onTabChange={setAwayActiveTab}
           onSelect={onSelect}
           onOpenModal={() => setModalTeamSide('away')}
+          onCreateTeam={() => onCreateTeam('away')}
+          onSaveCurrentAsCustom={() => onSaveCurrentAsCustomTeam('away')}
           onKitChange={(k) => onKitChange('away', k)}
           onSelectPreset={(p) => onLoadTeamPreset('away', p)}
           onSubstitute={(starterId, benchId) => onSubstitute('away', starterId, benchId)}
@@ -310,8 +342,12 @@ export function RightSidebar({
           isOpen={true}
           teamSide={modalTeamSide}
           currentTeamId={modalTeamSide === 'home' ? homeTeamId : awayTeamId}
+          customTeams={customTeams}
           onClose={() => setModalTeamSide(null)}
           onSelectTeam={(team) => onLoadTeamPreset(modalTeamSide, team)}
+          onCreateTeam={() => onCreateTeam(modalTeamSide)}
+          onEditCustomTeam={onEditCustomTeam}
+          onDeleteCustomTeam={onDeleteCustomTeam}
         />
       )}
     </>
@@ -322,9 +358,11 @@ function TeamCard({
   teamSide,
   teamName,
   teamId,
+  formation,
   kit,
   players,
   bench,
+  customTeams,
   selectedId,
   activeTab,
   kitOpen,
@@ -333,6 +371,8 @@ function TeamCard({
   onTabChange,
   onSelect,
   onOpenModal,
+  onCreateTeam,
+  onSaveCurrentAsCustom,
   onKitChange,
   onSelectPreset,
   onSubstitute,
@@ -342,9 +382,11 @@ function TeamCard({
   teamSide: TeamId
   teamName: string
   teamId?: string
+  formation: FormationId
   kit: TeamKit
   players: Player[]
   bench: BenchPlayer[]
+  customTeams: TeamPreset[]
   selectedId: string | null
   activeTab: 'xi' | 'bench'
   kitOpen: boolean
@@ -353,6 +395,8 @@ function TeamCard({
   onTabChange: (tab: 'xi' | 'bench') => void
   onSelect: (id: string) => void
   onOpenModal: () => void
+  onCreateTeam: () => void
+  onSaveCurrentAsCustom: () => void
   onKitChange: (kit: TeamKit) => void
   onSelectPreset: (preset: TeamPreset) => void
   onSubstitute: (starterId: string, benchId: string) => void
@@ -364,14 +408,21 @@ function TeamCard({
   const borderAccent = isBlue ? 'border-blue-500/30' : 'border-red-500/30'
   const tabActiveBg = isBlue ? 'bg-blue-600 text-white' : 'bg-red-600 text-white'
 
+  const allAvailableTeams = [...customTeams, ...TEAMS]
+
   return (
     <section className={`rounded-xl border bg-slate-800/40 p-3 ${borderAccent}`}>
       {/* Team header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <span className={`text-[10px] font-bold uppercase tracking-wider ${titleColor}`}>
-            {teamSide === 'home' ? 'Home Team' : 'Away Team'}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${titleColor}`}>
+              {teamSide === 'home' ? 'Home Team' : 'Away Team'}
+            </span>
+            <span className="rounded bg-slate-800 px-1 py-0.2 text-[9px] font-semibold text-slate-400">
+              {formation}
+            </span>
+          </div>
           <h3 className="truncate text-sm font-bold text-slate-100" title={teamName}>
             {teamName}
           </h3>
@@ -390,44 +441,66 @@ function TeamCard({
         </div>
       </div>
 
-      {/* Team selector buttons */}
-      <div className="mt-2.5 flex items-center gap-1.5">
+      {/* Team action buttons */}
+      <div className="mt-2.5 grid grid-cols-3 gap-1">
         <button
           type="button"
           onClick={onOpenModal}
-          className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 py-1.5 px-2 text-xs font-semibold text-white shadow transition"
+          className="flex items-center justify-center gap-1 rounded-lg bg-emerald-600/90 hover:bg-emerald-600 py-1.5 px-1.5 text-[11px] font-semibold text-white shadow transition"
           title="Browse all European clubs & national teams"
         >
-          <Sparkles size={13} /> Change Team
+          <Sparkles size={12} /> Change
         </button>
 
         <button
           type="button"
-          onClick={onToggleKit}
-          className={`flex items-center gap-1 rounded-lg border border-slate-700 py-1.5 px-2 text-xs text-slate-300 hover:bg-slate-700 transition ${
-            kitOpen ? 'bg-slate-700 text-white' : 'bg-slate-800'
-          }`}
-          title="Customise Kit Colors"
+          onClick={onCreateTeam}
+          className="flex items-center justify-center gap-1 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 py-1.5 px-1.5 text-[11px] font-medium text-slate-200 transition"
+          title="Create custom team from scratch"
         >
-          <Palette size={13} />
-          {kitOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          <Plus size={12} /> New Team
+        </button>
+
+        <button
+          type="button"
+          onClick={onSaveCurrentAsCustom}
+          className="flex items-center justify-center gap-1 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 py-1.5 px-1.5 text-[11px] font-medium text-slate-200 transition"
+          title="Save current board players & kit as reusable custom team"
+        >
+          <BookmarkPlus size={12} /> Save Preset
         </button>
       </div>
 
-      {/* Quick preset selector dropdown */}
-      <div className="mt-1.5">
+      {/* Quick preset selector dropdown & Kit toggle */}
+      <div className="mt-1.5 flex items-center gap-1">
         <select
           aria-label={`Select ${teamSide === 'home' ? 'Home' : 'Away'} team preset`}
           value={teamId || ''}
           onChange={(e) => {
-            const chosen = TEAMS.find((t) => t.id === e.target.value)
+            if (e.target.value === 'CREATE_NEW') {
+              onCreateTeam()
+              return
+            }
+            const chosen = allAvailableTeams.find((t) => t.id === e.target.value)
             if (chosen) onSelectPreset(chosen)
           }}
-          className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-300 outline-none focus:border-emerald-500"
+          className="flex-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-300 outline-none focus:border-emerald-500"
         >
           <option value="" disabled>
             Quick Select Team...
           </option>
+          <option value="CREATE_NEW">➕ + Create New Team...</option>
+
+          {customTeams.length > 0 && (
+            <optgroup label="⭐ My Custom Teams">
+              {customTeams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  ⭐ {t.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+
           <optgroup label="Premier League">
             {TEAMS.filter((t) => t.category === 'Premier League').map((t) => (
               <option key={t.id} value={t.id}>
@@ -471,6 +544,17 @@ function TeamCard({
             ))}
           </optgroup>
         </select>
+
+        <button
+          type="button"
+          onClick={onToggleKit}
+          className={`rounded-md border border-slate-700 p-1.5 text-xs text-slate-300 hover:bg-slate-700 transition ${
+            kitOpen ? 'bg-slate-700 text-white' : 'bg-slate-900'
+          }`}
+          title="Customize Kit Colors"
+        >
+          <Palette size={13} />
+        </button>
       </div>
 
       {/* Kit Color Editor (Collapsible) */}

@@ -44,6 +44,7 @@ export interface TeamKit {
 }
 
 export type TeamCategory =
+  | 'Custom'
   | 'Premier League'
   | 'La Liga'
   | 'Bundesliga'
@@ -61,12 +62,13 @@ export interface TeamPreset {
   id: string
   name: string
   shortName: string
-  category: TeamCategory
+  category: TeamCategory | string
   country: string
   formation: FormationId
   kit: TeamKit
   startingXI: PresetPlayer[]
   bench: PresetPlayer[]
+  isCustom?: boolean
 }
 
 export interface DrawingStyle {

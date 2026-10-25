@@ -107,6 +107,10 @@ export const FORMATION_LIST: FormationId[] = [
   '4-5-1',
 ]
 
+export function getFormationSlots(formation: FormationId): Slot[] {
+  return FORMATIONS[formation]
+}
+
 function mirrorX(x: number): number {
   return 100 - x
 }

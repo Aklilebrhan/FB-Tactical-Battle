@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { X, Search, Shield, Users } from 'lucide-react'
+import { X, Search, Shield, Users, Plus, Pencil, Trash2 } from 'lucide-react'
 import { TEAMS, TEAM_CATEGORIES } from '../data/teams'
 import type { TeamCategory, TeamPreset, TeamId } from '../types'
 
@@ -7,11 +7,16 @@ interface TeamPickerModalProps {
   isOpen: boolean
   teamSide: TeamId
   currentTeamId?: string
+  customTeams?: TeamPreset[]
   onClose: () => void
   onSelectTeam: (team: TeamPreset) => void
+  onCreateTeam?: () => void
+  onEditCustomTeam?: (team: TeamPreset) => void
+  onDeleteCustomTeam?: (teamId: string) => void
 }
 
-const CATEGORY_ICONS: Record<TeamCategory, string> = {
+const CATEGORY_ICONS: Record<string, string> = {
+  Custom: '⭐',
   'Premier League': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
   'La Liga': '🇪🇸',
   'Bundesliga': '🇩🇪',
@@ -24,14 +29,23 @@ export function TeamPickerModal({
   isOpen,
   teamSide,
   currentTeamId,
+  customTeams = [],
   onClose,
   onSelectTeam,
+  onCreateTeam,
+  onEditCustomTeam,
+  onDeleteCustomTeam,
 }: TeamPickerModalProps) {
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<TeamCategory | 'All'>('All')
 
+  // Combine custom teams and preset teams (custom teams first!)
+  const allTeams = useMemo(() => {
+    return [...customTeams, ...TEAMS]
+  }, [customTeams])
+
   const filteredTeams = useMemo(() => {
-    return TEAMS.filter((t) => {
+    return allTeams.filter((t) => {
       const matchesCategory =
         selectedCategory === 'All' || t.category === selectedCategory
 
@@ -50,7 +64,7 @@ export function TeamPickerModal({
 
       return matchesCategory && (matchesName || matchesPlayer)
     })
-  }, [search, selectedCategory])
+  }, [allTeams, search, selectedCategory])
 
   if (!isOpen) return null
 
@@ -61,26 +75,31 @@ export function TeamPickerModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="relative flex h-[85vh] w-full max-w-4xl flex-col rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl overflow-hidden"
+        className="relative flex h-[88vh] w-full max-w-4xl flex-col rounded-2xl border border-slate-700/80 bg-slate-900 shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
           <div>
             <div className="flex items-center gap-2">
               <span className={`text-xs font-bold uppercase tracking-wider ${sideAccent}`}>
                 Select {sideLabel}
               </span>
               <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
-                {TEAMS.length} Teams Available
+                {allTeams.length} Teams Available
               </span>
+              {customTeams.length > 0 && (
+                <span className="rounded-full bg-emerald-950 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 border border-emerald-500/30">
+                  {customTeams.length} Custom
+                </span>
+              )}
             </div>
             <h2 className="text-lg font-bold text-slate-100">
-              European Powerhouses & National Teams
+              European Powerhouses & Custom Teams
             </h2>
           </div>
           <button
@@ -92,34 +111,51 @@ export function TeamPickerModal({
           </button>
         </div>
 
-        {/* Search & Filters */}
-        <div className="flex flex-col gap-3 border-b border-slate-800/80 bg-slate-900/60 p-4">
-          <div className="relative">
-            <Search
-              size={18}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              type="text"
-              placeholder="Search team, country, or player (e.g. Man City, Bellingham, France, Haaland)..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              autoFocus
-            />
-            {search && (
+        {/* Search & Actions Bar */}
+        <div className="flex flex-col gap-2.5 border-b border-slate-800/80 bg-slate-900/60 p-4">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search
+                size={18}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                type="text"
+                placeholder="Search team, country, or player (e.g. Man City, Bellingham, Real Madrid, Haaland)..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                autoFocus
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Create Custom Team Button */}
+            {onCreateTeam && (
               <button
                 type="button"
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+                onClick={() => {
+                  onCreateTeam()
+                  onClose()
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-900/30 transition shrink-0"
               >
-                Clear
+                <Plus size={16} />
+                <span>Create Team</span>
               </button>
             )}
           </div>
 
           {/* Category Chips */}
-          <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1 text-xs">
+          <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-0.5 text-xs">
             <button
               type="button"
               onClick={() => setSelectedCategory('All')}
@@ -129,48 +165,67 @@ export function TeamPickerModal({
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              All Leagues
+              All Teams ({allTeams.length})
             </button>
-            {TEAM_CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition ${
-                  selectedCategory === cat
-                    ? 'bg-emerald-600 text-white shadow'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                <span>{CATEGORY_ICONS[cat]}</span>
-                <span>{cat}</span>
-              </button>
-            ))}
+            {TEAM_CATEGORIES.map((cat) => {
+              const count = allTeams.filter((t) => t.category === cat).length
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition ${
+                    selectedCategory === cat
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  <span>{CATEGORY_ICONS[cat] || '⚽'}</span>
+                  <span>
+                    {cat} {count > 0 ? `(${count})` : ''}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
         {/* Team Grid */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {filteredTeams.length === 0 ? (
-            <div className="flex h-48 flex-col items-center justify-center text-slate-400">
+            <div className="flex h-56 flex-col items-center justify-center text-slate-400 text-center">
               <Shield size={36} className="mb-2 opacity-40" />
-              <p className="text-sm font-medium">No teams matching "{search}"</p>
-              <p className="text-xs text-slate-500">Try searching a different name or league</p>
+              <p className="text-sm font-semibold">No teams found</p>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-xs">
+                {selectedCategory === 'Custom'
+                  ? "You haven't created any custom teams yet."
+                  : `No teams matching "${search}"`}
+              </p>
+              {onCreateTeam && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreateTeam()
+                    onClose()
+                  }}
+                  className="mt-3 flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 transition shadow"
+                >
+                  <Plus size={14} /> Create Your Own Team
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filteredTeams.map((team) => {
                 const isSelected = team.id === currentTeamId
-                const topStars = team.startingXI.slice(8, 11).map((p) => p.name).join(', ')
+                const topStars = team.startingXI
+                  .slice(team.startingXI.length - 3)
+                  .map((p) => p.name)
+                  .join(', ')
 
                 return (
-                  <button
+                  <div
                     key={team.id}
-                    type="button"
-                    onClick={() => {
-                      onSelectTeam(team)
-                      onClose()
-                    }}
                     className={`group relative flex flex-col justify-between rounded-xl border p-4 text-left transition ${
                       isSelected
                         ? 'border-emerald-500 bg-emerald-950/25 ring-2 ring-emerald-500/40 shadow-lg'
@@ -178,14 +233,23 @@ export function TeamPickerModal({
                     }`}
                   >
                     <div>
-                      {/* Top row: badge & kit swatch */}
+                      {/* Top row: badge, category & kit swatch */}
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">{CATEGORY_ICONS[team.category]}</span>
+                          <span className="text-lg">
+                            {CATEGORY_ICONS[team.category] || '⚽'}
+                          </span>
                           <div>
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                              {team.category}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                {team.category}
+                              </span>
+                              {team.isCustom && (
+                                <span className="rounded bg-amber-500/20 px-1 py-0.2 text-[9px] font-bold text-amber-300">
+                                  CUSTOM
+                                </span>
+                              )}
+                            </div>
                             <h3 className="text-base font-bold text-white group-hover:text-emerald-400 transition">
                               {team.name}
                             </h3>
@@ -206,7 +270,7 @@ export function TeamPickerModal({
                         </div>
                       </div>
 
-                      {/* Formation & squad info */}
+                      {/* Formation & squad count */}
                       <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
                         <span className="rounded bg-slate-900 px-2 py-0.5 font-medium text-slate-300 border border-slate-700/60">
                           {team.formation}
@@ -218,20 +282,65 @@ export function TeamPickerModal({
                         </span>
                       </div>
 
-                      {/* Star players */}
+                      {/* Players preview */}
                       <p className="mt-2 text-xs text-slate-400 line-clamp-1">
-                        <span className="text-slate-500 font-medium">Attack: </span>
-                        {topStars}
+                        <span className="text-slate-500 font-medium">Squad: </span>
+                        {topStars || '11 starters configured'}
                       </p>
                     </div>
 
-                    <div className="mt-3 flex items-center justify-between border-t border-slate-700/40 pt-2.5 text-[11px]">
+                    {/* Bottom action row */}
+                    <div className="mt-3.5 flex items-center justify-between border-t border-slate-700/40 pt-2.5 text-[11px]">
                       <span className="text-slate-400">{team.country}</span>
-                      <span className="font-semibold text-emerald-400 group-hover:underline">
-                        {isSelected ? 'Currently Loaded ✓' : 'Load Team →'}
-                      </span>
+
+                      <div className="flex items-center gap-1.5">
+                        {team.isCustom && onEditCustomTeam && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEditCustomTeam(team)
+                              onClose()
+                            }}
+                            className="p-1 text-slate-400 hover:text-amber-300 transition"
+                            title="Edit this custom team"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {team.isCustom && onDeleteCustomTeam && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (window.confirm(`Delete custom team "${team.name}"?`)) {
+                                onDeleteCustomTeam(team.id)
+                              }
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-400 transition"
+                            title="Delete this custom team"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onSelectTeam(team)
+                            onClose()
+                          }}
+                          className={`font-semibold transition px-2 py-0.5 rounded ${
+                            isSelected
+                              ? 'text-emerald-400 bg-emerald-950/50'
+                              : 'text-emerald-400 hover:underline hover:bg-slate-700/50'
+                          }`}
+                        >
+                          {isSelected ? 'Loaded ✓' : 'Load Team →'}
+                        </button>
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>
@@ -241,4 +350,3 @@ export function TeamPickerModal({
     </div>
   )
 }
-

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LeftSidebar } from './components/LeftSidebar'
 import { RightSidebar } from './components/RightSidebar'
+import { CreateTeamModal } from './components/CreateTeamModal'
 import {
   TacticalBoard,
   type BoardHandle,
@@ -12,8 +13,10 @@ import {
   clearPersisted,
   loadFrames,
   loadPersisted,
+  loadCustomTeams,
   saveFrames,
   savePersisted,
+  saveCustomTeams,
 } from './persistence'
 import type {
   Ball,
@@ -26,6 +29,7 @@ import type {
   PitchMode,
   PitchTheme,
   Player,
+  PresetPlayer,
   TeamId,
   TeamKit,
   TeamPreset,
@@ -225,8 +229,16 @@ export default function App() {
   const [frames, setFrames] = useState<BoardFrame[]>(() =>
     loadFrames<unknown>().filter(isBoardFrame),
   )
+  const [customTeams, setCustomTeams] = useState<TeamPreset[]>(() => loadCustomTeams())
+  const [createTeamModalOpen, setCreateTeamModalOpen] = useState(false)
+  const [createTeamModalSide, setCreateTeamModalSide] = useState<TeamId>('home')
+  const [editingTeam, setEditingTeam] = useState<Partial<TeamPreset> | null>(null)
 
   const { players, ball, drawings, homeBench, awayBench } = state
+
+  useEffect(() => {
+    saveCustomTeams(customTeams)
+  }, [customTeams])
 
   useEffect(() => {
     savePersisted({
@@ -249,6 +261,7 @@ export default function App() {
       showHome,
       showAway,
       snapToGrid,
+      customTeams,
     })
   }, [
     players,
@@ -270,6 +283,7 @@ export default function App() {
     showHome,
     showAway,
     snapToGrid,
+    customTeams,
   ])
 
   useEffect(() => {
@@ -459,6 +473,104 @@ export default function App() {
     [homeBench, awayBench, commit],
   )
 
+  const handleSaveCustomTeam = useCallback(
+    (team: TeamPreset, applyToSide?: TeamId) => {
+      setCustomTeams((prev) => {
+        const idx = prev.findIndex((t) => t.id === team.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = team
+          return next
+        }
+        return [team, ...prev]
+      })
+
+      if (applyToSide) {
+        onLoadTeamPreset(applyToSide, team)
+      }
+
+      setCreateTeamModalOpen(false)
+      setEditingTeam(null)
+    },
+    [onLoadTeamPreset],
+  )
+
+  const handleDeleteCustomTeam = useCallback(
+    (teamId: string) => {
+      if (window.confirm('Are you sure you want to delete this custom team preset?')) {
+        setCustomTeams((prev) => prev.filter((t) => t.id !== teamId))
+        if (homeTeamId === teamId) setHomeTeamId(undefined)
+        if (awayTeamId === teamId) setAwayTeamId(undefined)
+      }
+    },
+    [homeTeamId, awayTeamId],
+  )
+
+  const handleCreateTeam = useCallback((side: TeamId = 'home') => {
+    setCreateTeamModalSide(side)
+    setEditingTeam(null)
+    setCreateTeamModalOpen(true)
+  }, [])
+
+  const handleEditCustomTeam = useCallback(
+    (team: TeamPreset) => {
+      setCreateTeamModalSide(team.id === awayTeamId ? 'away' : 'home')
+      setEditingTeam(team)
+      setCreateTeamModalOpen(true)
+    },
+    [awayTeamId],
+  )
+
+  const handleSaveCurrentAsCustomTeam = useCallback(
+    (teamSide: TeamId) => {
+      const isHome = teamSide === 'home'
+      const teamStarters = players.filter((p) => p.team === teamSide)
+      const bench = isHome ? homeBench : awayBench
+      const kit = isHome ? homeKit : awayKit
+      const formation = isHome ? homeFormation : awayFormation
+      const currentName = isHome ? homeTeamName : awayTeamName
+
+      const startingXI: PresetPlayer[] = teamStarters.map((p) => ({
+        number: p.number,
+        name: p.name,
+        role: p.role || 'Player',
+      }))
+
+      const benchPreset: PresetPlayer[] = bench.map((b) => ({
+        number: b.number,
+        name: b.name,
+        role: b.role || 'SUB',
+      }))
+
+      const draftPreset: Partial<TeamPreset> = {
+        name: currentName,
+        shortName: currentName.slice(0, 3).toUpperCase(),
+        country: 'Custom',
+        category: 'Custom',
+        formation,
+        kit: { ...kit },
+        startingXI,
+        bench: benchPreset,
+        isCustom: true,
+      }
+
+      setCreateTeamModalSide(teamSide)
+      setEditingTeam(draftPreset)
+      setCreateTeamModalOpen(true)
+    },
+    [
+      players,
+      homeBench,
+      awayBench,
+      homeKit,
+      awayKit,
+      homeFormation,
+      awayFormation,
+      homeTeamName,
+      awayTeamName,
+    ],
+  )
+
   const onKitChange = useCallback((team: TeamId, kit: TeamKit) => {
     if (team === 'home') setHomeKit(kit)
     else setAwayKit(kit)
@@ -615,6 +727,7 @@ export default function App() {
       showAway,
       snapToGrid,
       frames,
+      customTeams,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json',
@@ -648,6 +761,7 @@ export default function App() {
     showAway,
     snapToGrid,
     frames,
+    customTeams,
   ])
 
   const onImportJson = useCallback(
@@ -697,6 +811,18 @@ export default function App() {
           if (typeof data.snapToGrid === 'boolean') setSnapToGrid(data.snapToGrid)
           if (Array.isArray(data.frames)) {
             setFrames(data.frames.filter(isBoardFrame))
+          }
+          if (Array.isArray(data.customTeams)) {
+            const importedCustomTeams = (data.customTeams as TeamPreset[]).filter(
+              (t) => t && typeof t.id === 'string' && typeof t.name === 'string',
+            )
+            if (importedCustomTeams.length > 0) {
+              setCustomTeams((prev) => {
+                const map = new Map(prev.map((t) => [t.id, t]))
+                importedCustomTeams.forEach((t) => map.set(t.id, t))
+                return Array.from(map.values())
+              })
+            }
           }
           setSelectedId(null)
         } catch {
@@ -870,6 +996,9 @@ export default function App() {
         awayTeamName={awayTeamName}
         homeTeamId={homeTeamId}
         awayTeamId={awayTeamId}
+        homeFormation={homeFormation}
+        awayFormation={awayFormation}
+        customTeams={customTeams}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onUpdatePlayer={onUpdatePlayer}
@@ -879,7 +1008,25 @@ export default function App() {
         onSubstitute={onSubstitute}
         onAddBenchPlayer={onAddBenchPlayer}
         onRemoveBenchPlayer={onRemoveBenchPlayer}
+        onCreateTeam={handleCreateTeam}
+        onEditCustomTeam={handleEditCustomTeam}
+        onDeleteCustomTeam={handleDeleteCustomTeam}
+        onSaveCurrentAsCustomTeam={handleSaveCurrentAsCustomTeam}
       />
+
+      {createTeamModalOpen && (
+        <CreateTeamModal
+          key={editingTeam?.id || `new-${createTeamModalSide}`}
+          isOpen={createTeamModalOpen}
+          teamSide={createTeamModalSide}
+          initialTeam={editingTeam}
+          onClose={() => {
+            setCreateTeamModalOpen(false)
+            setEditingTeam(null)
+          }}
+          onSaveTeam={handleSaveCustomTeam}
+        />
+      )}
     </div>
   )
 }
